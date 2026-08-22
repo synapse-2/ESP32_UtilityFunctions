@@ -1,0 +1,20 @@
+{
+    "name": "UtilityFunctions",
+    "version": "1.0.0",
+    "description": "ESP32 Utility functions for reboot, logging and misc. diag info",
+    "keywords": "ESP32 Utility functions for reboot, logging and misc. diag info",
+    "repository": {
+        "type": "git",
+        "url": ""
+    },
+    "authors": [
+        {
+            "name": "synapse2",
+            "email": "",
+            "maintainer": true
+        }
+    ],
+    "license": "MIT",
+    "frameworks": "*",
+    "platforms": "*"
+}

@@ -1,5 +1,6 @@
 
 #include "UtilityFunctions.h"
+#include "WebLogPrint.h"
 #include "driver/ledc.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
@@ -16,12 +17,11 @@
 #include <string>
 #include "esp_partition.h"
 #include "esp_ota_ops.h"
+#include "nvs_flash.h"
 
-
-#ifdef SOC_WIFI_SUPPORTED
+#ifdef CONFIG_ESP_WIFI_ENABLED
 #include <WiFiManager.h>
 #endif
-
 
 #define STRINGIFY_IMPL(x) #x
 #define STRINGIFY(x) STRINGIFY_IMPL(x)
@@ -32,7 +32,6 @@ auto to_integer(magic_enum::Enum<E> value) -> int
   // magic_enum::Enum<E> - C++17 Concept for enum type.
   return static_cast<magic_enum::underlying_type_t<E>>(value);
 }
-
 
 // CRGB UtilityFunctions::leds[NUMPIXELS];
 
@@ -443,6 +442,72 @@ namespace UtilityFunctions
 
   void unpressRest() { buttonReset.pressed = false; }
 
+  /**
+   * @brief Check whether the physical reset/boot button was pressed.
+   *
+   * Plain words: if the BluetoothESP32 device is the boss (master) and someone presses the
+   * tiny boot button 3 times, the BluetoothESP32 device will forget saved WiFi and settings
+   * and then restart itself.  This is useful when you want to make it like
+   * new again.
+   *
+   * Algorithm (simple):
+   * - If we are the master device, check the reset button state.
+   * - If pressed, count how many times it was pressed recently.
+   * - If fewer than 3 presses: ignore (clear the press). If 3 or more:
+   *   - Erase WiFi settings and NVRAM, blink an LED a few times, wait, then
+   *     restart the board.
+   *
+   * Loops: a small for-loop blinks an LED 5 times to show the reset action.
+   */
+  void checkResetPressed()
+  {
+    // If this device is configured as the master, check whether the
+    // physical reset/boot button was pressed and handle a factory reset
+    // sequence (erase settings, blink LED, restart).
+    if (UtilityFunctions::isMaster())
+    {
+      // only check the boot button if we are the master device
+
+      if (UtilityFunctions::isResetPressed())
+      {
+        UtilityFunctions::debugLogf(
+            "Boot pressed num time: %i need 3 to reset system count goees to "
+            "zero after 3 secs reset detected at mills %i\n",
+            UtilityFunctions::numTimesResetPressed(),
+            UtilityFunctions::resetMills());
+
+        if (UtilityFunctions::numTimesResetPressed() < 3)
+        {
+          // Not enough presses yet: clear and wait for more
+          UtilityFunctions::unpressRest();
+          return;
+        }
+
+// Enough presses: erase settings and restart to factory-like state
+#ifdef CONFIG_ESP_WIFI_ENABLED
+        WiFiManager wm = WiFiManager(*(new WebLogPrint()));
+        wm.resetSettings(); // Reset WiFi settings
+#endif
+
+        nvs_flash_erase();
+        UtilityFunctions::debugLog("Resetting ALL NVRAM settings...");
+        // Blink the yellow LED 5 times to indicate an imminent full reset.
+        // Purpose: provide a visible warning before erasing settings.
+        // Exit condition: loop ends after 5 iterations.
+        for (int i = 0; i < 5; i++)
+        {
+          UtilityFunctions::ledYellow();
+          UtilityFunctions::delay(30);
+          UtilityFunctions::ledStop();
+          UtilityFunctions::delay(30);
+        }
+        UtilityFunctions::delay(1000); // short pause before restart
+        UtilityFunctions::debugLog("Restarting ESP...");
+        UtilityFunctions::ESP32Restart();
+      }
+    }
+  }
+
   String getDateTimeUTC()
   {
     struct tm timeinfo;
@@ -617,7 +682,7 @@ namespace UtilityFunctions
               (uint16_t)(macID >> 32) & 0x0000000000FF,
               (uint16_t)(macID >> 40) & 0x0000000000FF);
 
-    #ifdef SOC_WIFI_SUPPORTED
+#ifdef ESP_WIFI_ENABLED
     WiFiManager wm;
     // can contain gargbage on esp32 if wifi is not ready yet
     str = str + "[WIFI] WIFI_INFO DEBUG \n";
@@ -630,8 +695,8 @@ namespace UtilityFunctions
     str = str + std::format("[WIFI] RSSI: {} \n", WiFi.RSSI());
     str = str + std::format("[WIFI] PASS: {} \n", wm.getWiFiPass().c_str());
     str = str + std::format("[WIFI] HOSTNAME: {} \n", WiFi.getHostname());
-    #endif
-    
+#endif
+
     str = str + "\n\nIn order to RESET and ERASE NVRAM press BOOT key 3 times within "
                 "3 seconds";
 
@@ -836,7 +901,6 @@ namespace UtilityFunctions
   //     return lowestDevADDR;
   // }
 
-  
   void debugLog()
   {
     Serial.println();
@@ -952,14 +1016,11 @@ namespace UtilityFunctions
     return len;
   }
 
-  
   String getBuildTimeVersion()
   {
     std::string str = std::format("Build Time:{} {}", __DATE__, __TIME__);
     return String(str.c_str());
   }
-
-
 
   // save the old log in nvram and restart
   void ESP32Restart()
@@ -994,6 +1055,52 @@ namespace UtilityFunctions
     _preferences.end();
     return String(buffer, size);
     ;
+  }
+
+  // Load hostname from NVRAM
+  String loadLocalHostname()
+  {
+    Preferences _preferences;
+    _preferences.begin(NVRAM_PERFS, false);
+    String _localHostname = _preferences.getString(
+        NVRAM_PERFS_HOSTNAME_LOCAL_PROP, NVRAM_PERFS_HOSTNAME_LOCAL_DEFAULT);
+    _preferences.end();
+    // UtilityFunctions::debugLogf("loaded local hostname from NVRAM. %s\n", _localHostname.c_str());
+
+    return _localHostname;
+  }
+
+  // Save hostname to NVRAM
+  String saveLocalHostname(String newHostname)
+  {
+    size_t bytesWritten;
+    if (!newHostname.isEmpty() && (newHostname.length() < 32) &&
+        (!newHostname.endsWith(".local")))
+    {
+      Preferences _preferences;
+      _preferences.begin(NVRAM_PERFS, false);
+      bytesWritten = _preferences.putString(NVRAM_PERFS_HOSTNAME_LOCAL_PROP, newHostname);
+      _preferences.end();
+
+      if (bytesWritten == 0)
+      {
+        std::string str = "Unkown Error Invalid hostnname, must be less than 32 chars;not "
+                          "empty; and not .local in the end";
+        String Astr = String(str.c_str());
+        debugLog(Astr);
+        return Astr;
+      }
+      UtilityFunctions::debugLog("hostname updated and saved to NVRAM.");
+      return "";
+    }
+    else
+    {
+      std::string str = "Invalid hostnname, must be less than 32 chars;not "
+                        "empty; and not .local in the end";
+      String Astr = String(str.c_str());
+      debugLog(Astr);
+      return Astr;
+    }
   }
 
 } // namespace UtilityFunctions

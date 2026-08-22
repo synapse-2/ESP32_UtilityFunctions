@@ -68,6 +68,14 @@
 #define NVRAM_PERFS "registry" // references registry name
 #endif
 
+#ifndef NVRAM_PERFS_HOSTNAME_LOCAL_PROP
+#define NVRAM_PERFS_HOSTNAME_LOCAL_PROP "hostname"
+#endif
+
+#ifndef NVRAM_PERFS_HOSTNAME_LOCAL_DEFAULT
+#define NVRAM_PERFS_HOSTNAME_LOCAL_DEFAULT "UtilityFunctionsHost" // only use nuber alphabets and - and dot . NO .local It is added automtically
+#endif
+
 #ifndef NVRAM_PERFS_WEB_STATUS_LOG_BUFFER_PROP
 #define NVRAM_PERFS_WEB_STATUS_LOG_BUFFER_PROP "weblogOld"
 #endif
@@ -75,6 +83,22 @@
 #ifndef NVRAM_PERFS_WEB_STATUS_LOG_BUFFER_SIZE_PROP
 #define NVRAM_PERFS_WEB_STATUS_LOG_BUFFER_SIZE_PROP "weblogSize"
 #endif
+
+#ifdef CONFIG_ESP_WIFI_ENABLED
+#ifndef WIFIDEBUG
+#define WIFIDEBUG WM_DEBUG_VERBOSE
+#endif
+
+#ifndef  AP_CONNECT_TIMEOUT 
+#define AP_CONNECT_TIMEOUT 120 // seconds or 2 mins
+#endif
+
+#ifndef WIFI_DISCONNET_TIMEOUT_SEC 
+#define WIFI_DISCONNET_TIMEOUT_SEC 60 // in seconds time duration when disconneccted from wifi will cause the system to reboot.
+#endif
+
+#endif
+
 
 namespace UtilityFunctions
 {
@@ -121,6 +145,10 @@ namespace UtilityFunctions
   String partitionInfo();
   String webLog();
 
+
+  // check if reset was pressed
+   void checkResetPressed();
+
   // get RTC time
   String getDateTimeUTC();
 
@@ -129,6 +157,13 @@ namespace UtilityFunctions
 
   // get the log from last boot
   String getPreBootWebLog();
+
+    // Load hostname from NVRAM
+  String loadLocalHostname();
+
+  // Save hostname to NVRAM
+  String saveLocalHostname(String newHostname);
+
 
 }
 

@@ -1,7 +1,1 @@
-# Name,Type,SubType, Offset,Size,Flags
-nvs,data,nvs,0x9000,0x14000,
-otadata,data,ota,0x1D000,0x2000,
-app0,app,ota_0,0x20000,0x710000,
-ffat,data,fat,0x730000,0x19A000,
-app1,app,ota_1,0x8D0000,0x710000,
-coredump,data,coredump,0xFE0000,0x20000,
+D:/Documents/ESP32_UtilityFunctions/examples/simple/partitions_NVM_PHY_OTA_16M.csv
