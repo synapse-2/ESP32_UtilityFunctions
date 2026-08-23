@@ -3,10 +3,6 @@
     "version": "1.0.0",
     "description": "ESP32 Utility functions for reboot, logging and misc. diag info",
     "keywords": "ESP32 Utility functions for reboot, logging and misc. diag info",
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/synapse-2/ESP32_UtilityFunctions.git#1.0.0"
-    },
     "authors": [
         {
             "name": "synapse2",

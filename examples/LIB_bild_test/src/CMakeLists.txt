@@ -1,6 +1,6 @@
 # This file was automatically generated for projects
 # without default 'CMakeLists.txt' file.
 
-FILE(GLOB_RECURSE app_sources ${CMAKE_SOURCE_DIR}/examples/simple/src/*.*)
+FILE(GLOB_RECURSE app_sources ${CMAKE_SOURCE_DIR}/examples/LIB_bild_test/src/*.*)
 
 idf_component_register(SRCS ${app_sources})
