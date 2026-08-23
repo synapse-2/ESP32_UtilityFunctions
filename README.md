@@ -64,7 +64,7 @@ build_flags =
 	-D BOARD_HAS_PSRAM
 	-D USE_ESP_IDF_LOG
 	-D CCACHE_ENABLE=ON
-  -D WM_NOHELP						;do not show wifi manager help on the info page
+  	-D WM_NOHELP						;do not show wifi manager help on the info page
 
 ```
 
