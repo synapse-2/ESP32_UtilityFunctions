@@ -8,7 +8,7 @@
 #include <WiFiManager.h>
 #include <WiFiType.h>
 #endif
-
+ 
 #include "magic_enum/magic_enum.hpp"
 #include "magic_enum/magic_enum_iostream.hpp"
 
@@ -103,13 +103,19 @@ void setup()
     wm.setDebugOutput(true, WIFIDEBUG);
     wm.setConfigPortalBlocking(true);
     wm.setHostname(UtilityFunctions::loadLocalHostname());
-    wm.setShowInfoErase(false);  // no erase settings on info page
-    wm.setDarkMode(true);        // show in black background
-    wm.setShowInfoUpdate(false); // no OTA mode
-    wm.setConfigPortalTimeout(
-        AP_CONNECT_TIMEOUT); // Set the timeout for the configuration portal
+    wm.setShowInfoErase(false);             // no erase settings on info page
+    wm.setShowInfoUpdate(false);            // no OTA update button
+    wm.setTitle("WiFi Connection Manager"); // set title
+    wm.setDarkMode(true);                   // show in black background
 
-    // AcloudIOT_Decoder::LogWifiDebugInfo();
+    // custom menu via array or vector
+    //
+    // menu tokens, "wifi","wifinoscan","info","param","close","sep","erase","restart","exit" (sep is seperator) (if param is in menu, params will not show up in wifi page!)
+    // const char* menu[] = {"wifi","info","param","sep","restart","exit"};
+    std::vector<const char *> menu = {"wifi", "info", "param", "sep", "restart", "exit"};
+    wm.setMenu(menu);
+    wm.setConfigPortalTimeout(AP_CONNECT_TIMEOUT); // Set the timeout for the configuration portal
+
     res = wm.autoConnect(); // auto generated AP name from chipid
     // res = wm.autoConnect("AutoConnectAP"); // anonymous ap
     // res = wm.autoConnect("AutoConnectAP","password"); // password protected
@@ -141,14 +147,12 @@ void setup()
 // this shoud run on core 1
 void loop()
 {
-  //yield(); // for the watchdog timer on core 0
-  //UtilityFunctions::delay(1000);
+  // yield(); // for the watchdog timer on core 0
+  // UtilityFunctions::delay(1000);
 
   UtilityFunctions::debugLog("LOOP TASK Running...");
 
   // Check if the device is in master or slave mode
-  // If this device is configured as master, start AIoT cloud services and
-  // register callbacks; otherwise operate in BLE-only mode.
   if (UtilityFunctions::isMaster())
   {
     UtilityFunctions::debugLog(" Starting WIFI Connext ");
@@ -156,15 +160,20 @@ void loop()
     // timer for the wifi disconnect reboot.
     Wifi_Disconnect_Start_Time = 0;
 
-    // Main worker loop: continuously polls for BLE commands, cloud and
+    // Main worker loop: continuously polls for  commands and
     // WiFi status, and handles timeouts. Intended to run indefinitely.
     // Exit condition: only stops when the device is reset or powered off.
     for (;;) // infinite loop
     {
 
-      /// bluetooth handle
+      /// do work  handle
       UtilityFunctions::ledBlinkBlue();
+
+      /// do work 
       UtilityFunctions::delay(2000);
+      // other updates such as BLE, arduinoIot, web server etc are to be put here
+      
+      //work done 
       UtilityFunctions::ledStop();
 
       // Check WiFi connection: if disconnected, start/track a disconnect
