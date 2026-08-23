@@ -40,11 +40,12 @@ Add the folling lines to Platformio.ini
 
 ```text
 
-lib_deps = 
+lib_deps =
 	fastled/FastLED @ ^3.10.1
-  https://github.com/synapse-2/ESP32_magic_enum.git
+	https://github.com/synapse-2/ESP32_magic_enum.git
 	tzapu/WiFiManager @ ^2.0.17
-  https://github.com/synapse-2/ESP32_UtilityFunctions.git#1.0.0
+	arduino-libraries/Arduino_DebugUtils @ ^1.4.0
+	https://github.com/synapse-2/ESP32_UtilityFunctions.git#1.0.0
 
 board_build.partitions = partitions_NVM_PHY_OTA_16M.csv
 
