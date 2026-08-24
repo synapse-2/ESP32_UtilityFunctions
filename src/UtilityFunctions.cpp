@@ -18,6 +18,7 @@
 #include "esp_partition.h"
 #include "esp_ota_ops.h"
 #include "nvs_flash.h"
+#include <Arduino_DebugUtils.h>
 
 #ifdef CONFIG_ESP_WIFI_ENABLED
 #include <WiFiManager.h>
@@ -39,6 +40,113 @@ namespace UtilityFunctions
 {
   CRGB leds[NUMPIXELS];
   bool newLineSeenForESPLog = true;
+
+  // have the wifi managwer log to the web logger
+#ifdef CONFIG_ESP_WIFI_ENABLED
+  WiFiManager wm = WiFiManager(*(new WebLogPrint()));
+  uint64_t Wifi_Disconnect_Start_Time = 0;
+
+  String getSSID() { return wm.getWiFiSSID(); }
+  String getPSK() { return wm.getWiFiPass(); }
+
+  void setupWiFiAndConnect()
+  {
+#ifndef CONFIG_ESP_WIFI_ENABLED
+    UtilityFunctions::debugLog(
+        "WIFI is truned off");
+#else
+
+    // reset settings - wipe stored credentials for testing
+    //  these are stored by the esp library
+    //  wm.resetSettings();
+
+    // Automatically connect using saved credentials,
+    // if connection fails, it starts an access point with the specified name (
+    // "AutoConnectAP"), if empty will auto generate SSID, if password is blank
+    // it will be anonymous AP (wm.autoConnect()) then goes into a blocking loop
+    // awaiting configuration and will return success result
+
+    bool res;
+    UtilityFunctions::ledRed();
+
+    UtilityFunctions::debugLog("Starting WiFiManager...");
+    wm.setDebugOutput(true, WIFIDEBUG);
+    wm.setConfigPortalBlocking(true);
+    wm.setHostname(UtilityFunctions::loadLocalHostname());
+    wm.setShowInfoErase(false);             // no erase settings on info page
+    wm.setShowInfoUpdate(false);            // no OTA update button
+    wm.setTitle("WiFi Connection Manager"); // set title
+    wm.setDarkMode(true);                   // show in black background
+
+    // custom menu via array or vector
+    //
+    // menu tokens, "wifi","wifinoscan","info","param","close","sep","erase","restart","exit" (sep is seperator) (if param is in menu, params will not show up in wifi page!)
+    // const char* menu[] = {"wifi","info","param","sep","restart","exit"};
+    std::vector<const char *> menu = {"wifi", "info", "param", "sep", "restart", "exit"};
+    wm.setMenu(menu);
+    wm.setConfigPortalTimeout(AP_CONNECT_TIMEOUT); // Set the timeout for the configuration portal
+
+    res = wm.autoConnect(); // auto generated AP name from chipid
+    // res = wm.autoConnect("AutoConnectAP"); // anonymous ap
+    // res = wm.autoConnect("AutoConnectAP","password"); // password protected
+    // ap
+
+    // If connection to WiFi failed after the config portal timeout,
+    // indicate failure (long red blink) and restart to retry the
+    // initialization flow. Else, continue normal startup.
+    if (!res)
+    {
+      UtilityFunctions::debugLogf("Failed to connect to wifi in startup init, and no one connected to AP in sec:%i\n", AP_CONNECT_TIMEOUT);
+      UtilityFunctions::ledBlinkRedLong();
+      UtilityFunctions::debugLog("Failed to connect to wifi ssid in start up init: RESTARTING");
+      UtilityFunctions::ESP32Restart();
+    }
+    else
+    {
+      // if you get here you have connected to the WiFi
+      WiFi.setAutoReconnect(true);
+      UtilityFunctions::debugLog("Connected to WIFI Network...yeey :)");
+      UtilityFunctions::ledStop();
+      UtilityFunctions::ledBlinkGreenLong();
+    }
+
+#endif
+  }
+
+  void rebootIfWiFiDisconnected()
+  {
+    // Check WiFi connection: if disconnected, start/track a disconnect
+    // timer and reboot the device if it remains disconnected longer than
+    // `WIFI_DISCONNET_TIMEOUT_SEC`. Exit: when connected the timer resets.
+    if (WiFi.status() != WL_CONNECTED)
+    {
+      // we are disconnected.
+      if (Wifi_Disconnect_Start_Time == 0)
+      {
+        // this is the first time we are disconnected
+        Wifi_Disconnect_Start_Time = esp_timer_get_time(); // set this to current time
+        UtilityFunctions::debugLogf("Wifi is NOT CONNECTED(State =3); current state:%i and current time:%llu\n", WiFi.status(), Wifi_Disconnect_Start_Time);
+      }
+      else
+      {
+        // we have been disconnected for some time find how long
+        uint64_t time_elapsed = (esp_timer_get_time() - Wifi_Disconnect_Start_Time);
+        if (time_elapsed > (WIFI_DISCONNET_TIMEOUT_SEC * 1000000))
+        {
+          // greater than s secs (s * 1000 * 1000)
+          UtilityFunctions::debugLogf("Wifi is NOT CONNECTED for atleast %i secs, REBOOTING time elapsed:%llu and start time:%llu\n", WIFI_DISCONNET_TIMEOUT_SEC, time_elapsed, Wifi_Disconnect_Start_Time);
+          UtilityFunctions::ESP32Restart();
+        }
+      }
+    }
+    else
+    {
+      // we are connected so reset the disconenct time
+      Wifi_Disconnect_Start_Time = 0;
+    }
+  }
+
+#endif
 
   namespace
   {
@@ -471,7 +579,7 @@ namespace UtilityFunctions
       if (UtilityFunctions::isResetPressed())
       {
         UtilityFunctions::debugLogf(
-            "Boot pressed num time: %i need 3 to reset system count goees to "
+            "Boot pressed %i times, need 3 to reset system count goees to "
             "zero after 3 secs reset detected at mills %i\n",
             UtilityFunctions::numTimesResetPressed(),
             UtilityFunctions::resetMills());
@@ -796,6 +904,14 @@ namespace UtilityFunctions
     {
       return;
     }
+
+    // have the ESP logs go to weblog
+    esp_log_set_vprintf(UtilityFunctions::webLogPrintf);
+
+    // set the arduino cloud debug to weblogPrint stream
+    Debug.setDebugOutputStream(new WebLogPrint());
+
+    Serial.setDebugOutput(true);
 
     xLedMutex = xSemaphoreCreateMutex();
     if (xLedMutex == NULL)

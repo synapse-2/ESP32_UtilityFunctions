@@ -1,6 +1,6 @@
 {
     "name": "UtilityFunctions",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "description": "ESP32 Utility functions for reboot, logging and misc. diag info",
     "keywords": "ESP32 Utility functions for reboot, logging and misc. diag info",
     "authors": [

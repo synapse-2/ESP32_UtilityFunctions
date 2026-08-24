@@ -1,10 +1,29 @@
 // filepath: d:\Documents\XGIMI_ALEXA_INTEGRATION\src\UtilityFunctions.h
+#pragma once // The compiler will ignore this file if it is included again
+
 #ifndef UtilityFunctions_H
 #define UtilityFunctions_H
 
 // #include "defaults.h"
 #include <FastLED.h>
 #include <Print.h>
+
+#ifdef CONFIG_ESP_WIFI_ENABLED
+#include <WiFiManager.h>
+
+#ifndef WIFIDEBUG
+#define WIFIDEBUG WM_DEBUG_VERBOSE
+#endif
+
+#ifndef AP_CONNECT_TIMEOUT
+#define AP_CONNECT_TIMEOUT 120 // seconds or 2 mins
+#endif
+
+#ifndef WIFI_DISCONNET_TIMEOUT_SEC
+#define WIFI_DISCONNET_TIMEOUT_SEC 60 // in seconds time duration when disconneccted from wifi will cause the system to reboot.
+#endif
+
+#endif
 
 // specific to our ESP32S3 chip
 
@@ -84,24 +103,21 @@
 #define NVRAM_PERFS_WEB_STATUS_LOG_BUFFER_SIZE_PROP "weblogSize"
 #endif
 
-#ifdef CONFIG_ESP_WIFI_ENABLED
-#ifndef WIFIDEBUG
-#define WIFIDEBUG WM_DEBUG_VERBOSE
-#endif
-
-#ifndef  AP_CONNECT_TIMEOUT 
-#define AP_CONNECT_TIMEOUT 120 // seconds or 2 mins
-#endif
-
-#ifndef WIFI_DISCONNET_TIMEOUT_SEC 
-#define WIFI_DISCONNET_TIMEOUT_SEC 60 // in seconds time duration when disconneccted from wifi will cause the system to reboot.
-#endif
-
-#endif
-
-
 namespace UtilityFunctions
 {
+
+  // have the wifi managwer log to the web logger
+#ifdef CONFIG_ESP_WIFI_ENABLED
+  extern WiFiManager wm;
+  extern uint64_t Wifi_Disconnect_Start_Time;
+
+  String getSSID();
+  String getPSK();
+
+  void setupWiFiAndConnect();
+  void rebootIfWiFiDisconnected();
+
+#endif
 
   void delay(long waitMills);
   void waitTillInitComplete();
@@ -145,9 +161,8 @@ namespace UtilityFunctions
   String partitionInfo();
   String webLog();
 
-
   // check if reset was pressed
-   void checkResetPressed();
+  void checkResetPressed();
 
   // get RTC time
   String getDateTimeUTC();
@@ -158,13 +173,11 @@ namespace UtilityFunctions
   // get the log from last boot
   String getPreBootWebLog();
 
-    // Load hostname from NVRAM
+  // Load hostname from NVRAM
   String loadLocalHostname();
 
   // Save hostname to NVRAM
   String saveLocalHostname(String newHostname);
-
-
 }
 
 #endif
