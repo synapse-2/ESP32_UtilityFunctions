@@ -8,7 +8,7 @@
 #include <WiFiManager.h>
 #include <WiFiType.h>
 #endif
- 
+
 #include "magic_enum/magic_enum.hpp"
 #include "magic_enum/magic_enum_iostream.hpp"
 
@@ -18,18 +18,6 @@ auto to_integer(magic_enum::Enum<E> value) -> int
   // magic_enum::Enum<E> - C++17 Concept for enum type.
   return static_cast<magic_enum::underlying_type_t<E>>(value);
 }
-
-// Define the LED_BUILTIN pin for the ESP32
-// This is typically GPIO 48 on many ESP32 boards, but can vary by board.
-
-// have the wifi managwer log to the web logger
-#ifdef CONFIG_ESP_WIFI_ENABLED
-WiFiManager wm = WiFiManager(*(new WebLogPrint()));
-uint64_t Wifi_Disconnect_Start_Time = 0;
-
-String getSSID() { return wm.getWiFiSSID(); }
-String getPSK() { return wm.getWiFiPass(); }
-#endif
 
 void setup()
 {
@@ -41,22 +29,12 @@ void setup()
   while (!Serial)
     ; // wait for serial attach
 
-  // also log the esp 32 errors to the log
-  // esp_log_level_set("*", ESP_LOG_VERBOSE);
-
-  // have the ESP logs go to weblog
-  esp_log_set_vprintf(UtilityFunctions::webLogPrintf);
-
-  // set the arduino cloud debug to weblogPrint stream
-  Debug.setDebugOutputStream(new WebLogPrint());
-
-  Serial.setDebugOutput(true);
   UtilityFunctions::debugLog("Initializing EXAMPLE...");
   UtilityFunctions::UtilityFunctionsInit(); // Initialize utility functions
 
   // Check if the device is in master or slave mode
   // If device is master: initialize cloud/WiFi functionality, otherwise
-  // run in BLE-only (slave) mode. Exit from this block when setup
+  // run in  (slave) mode. Exit from this block when setup
   // completes or after a restart is triggered on failure.
   if (UtilityFunctions::isMaster())
   {
@@ -64,7 +42,7 @@ void setup()
     /**
      * @brief Setup (what happens once when the BluetoothESP32 device wakes up)
      *
-     * Plain words: This function runs one time when the BluetoothESP32 device starts. It
+     * Plain words: This function runs one time when the  device starts. It
      * turns on the console (so we can see messages), sets up WiFi (if we are
      * the boss/master), starts the little web server that helps configure
      * the BluetoothESP32 device, and gets everything ready for the repeating work in
@@ -73,7 +51,6 @@ void setup()
      * Important steps:
      * - Start serial console for debug messages
      * - Redirect ESP logs to the web logger so logs are viewable remotely
-     * - Initialize utility code and the command ring buffer
      * - If master: start WiFiManager to connect to WiFi or create an AP
      * - Create the web server so users can interact through a browser
      *
@@ -82,8 +59,7 @@ void setup()
      */
 
 #ifndef CONFIG_ESP_WIFI_ENABLED
-    UtilityFunctions::debugLog(
-        "WIFI is truned off");
+    UtilityFunctions::debugLog("WIFI is truned off");
 #else
 
     // reset settings - wipe stored credentials for testing
@@ -96,51 +72,13 @@ void setup()
     // it will be anonymous AP (wm.autoConnect()) then goes into a blocking loop
     // awaiting configuration and will return success result
 
-    bool res;
-    UtilityFunctions::ledRed();
-
-    UtilityFunctions::debugLog("Starting WiFiManager...");
-    wm.setDebugOutput(true, WIFIDEBUG);
-    wm.setConfigPortalBlocking(true);
-    wm.setHostname(UtilityFunctions::loadLocalHostname());
-    wm.setShowInfoErase(false);             // no erase settings on info page
-    wm.setShowInfoUpdate(false);            // no OTA update button
-    wm.setTitle("WiFi Connection Manager"); // set title
-    wm.setDarkMode(true);                   // show in black background
-
-    // custom menu via array or vector
-    //
-    // menu tokens, "wifi","wifinoscan","info","param","close","sep","erase","restart","exit" (sep is seperator) (if param is in menu, params will not show up in wifi page!)
-    // const char* menu[] = {"wifi","info","param","sep","restart","exit"};
-    std::vector<const char *> menu = {"wifi", "info", "param", "sep", "restart", "exit"};
-    wm.setMenu(menu);
-    wm.setConfigPortalTimeout(AP_CONNECT_TIMEOUT); // Set the timeout for the configuration portal
-
-    res = wm.autoConnect(); // auto generated AP name from chipid
-    // res = wm.autoConnect("AutoConnectAP"); // anonymous ap
-    // res = wm.autoConnect("AutoConnectAP","password"); // password protected
-    // ap
-
-    // If connection to WiFi failed after the config portal timeout,
-    // indicate failure (long red blink) and restart to retry the
-    // initialization flow. Else, continue normal startup.
-    if (!res)
-    {
-      UtilityFunctions::debugLogf("Failed to connect to wifi in startup init, and no one connected to AP in sec:%i\n", AP_CONNECT_TIMEOUT);
-      UtilityFunctions::ledBlinkRedLong();
-      UtilityFunctions::debugLog("Failed to connect to wifi ssid in start up init: RESTARTING");
-      UtilityFunctions::ESP32Restart();
-    }
-    else
-    {
-      // if you get here you have connected to the WiFi
-      WiFi.setAutoReconnect(true);
-      UtilityFunctions::debugLog("Connected to WIFI Network...yeey :)");
-      UtilityFunctions::ledStop();
-      UtilityFunctions::ledBlinkGreenLong();
-    }
+    UtilityFunctions::setupWiFiAndConnect();
 
 #endif
+  }
+  else
+  {
+    /* slave code */
   }
 }
 
@@ -155,10 +93,6 @@ void loop()
   // Check if the device is in master or slave mode
   if (UtilityFunctions::isMaster())
   {
-    UtilityFunctions::debugLog(" Starting WIFI Connext ");
-
-    // timer for the wifi disconnect reboot.
-    Wifi_Disconnect_Start_Time = 0;
 
     // Main worker loop: continuously polls for  commands and
     // WiFi status, and handles timeouts. Intended to run indefinitely.
@@ -169,44 +103,20 @@ void loop()
       /// do work  handle
       UtilityFunctions::ledBlinkBlue();
 
-      /// do work 
-      UtilityFunctions::delay(2000);
+      /// do work
+      UtilityFunctions::delay(2000);  // update delay as needed
       // other updates such as BLE, arduinoIot, web server etc are to be put here
-      
-      //work done 
+#ifdef CONFIG_ESP_WIFI_ENABLED
+    // put wifi dependent code here for the loop 
+#endif
+      // work done
       UtilityFunctions::ledStop();
 
-      // Check WiFi connection: if disconnected, start/track a disconnect
-      // timer and reboot the device if it remains disconnected longer than
-      // `WIFI_DISCONNET_TIMEOUT_SEC`. Exit: when connected the timer resets.
-      if (WiFi.status() != WL_CONNECTED)
-      {
-        // we are disconnected.
-        if (Wifi_Disconnect_Start_Time == 0)
-        {
-          // this is the first time we are disconnected
-          Wifi_Disconnect_Start_Time = esp_timer_get_time(); // set this to current time
-          UtilityFunctions::debugLogf("Wifi is NOT CONNECTED(State =3); current state:%i and current time:%llu\n", WiFi.status(), Wifi_Disconnect_Start_Time);
-        }
-        else
-        {
-          // we have been disconnected for some time find how long
-          uint64_t time_elapsed = (esp_timer_get_time() - Wifi_Disconnect_Start_Time);
-          if (time_elapsed > (WIFI_DISCONNET_TIMEOUT_SEC * 1000000))
-          {
-            // greater than s secs (s * 1000 * 1000)
-            UtilityFunctions::debugLogf("Wifi is NOT CONNECTED for atleast %i secs, REBOOTING time elapsed:%llu and start time:%llu\n", WIFI_DISCONNET_TIMEOUT_SEC, time_elapsed, Wifi_Disconnect_Start_Time);
-            UtilityFunctions::ESP32Restart();
-          }
-        }
-      }
-      else
-      {
-        // we are connected so reset the disconenct time
-        Wifi_Disconnect_Start_Time = 0;
-      }
-
       UtilityFunctions::checkResetPressed(); // Check if the reset button has been pressed
+
+#ifdef CONFIG_ESP_WIFI_ENABLED
+      UtilityFunctions::rebootIfWiFiDisconnected(); // check for wifi disconet due to router issues
+#endif
     }
   }
 }
