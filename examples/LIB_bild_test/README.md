@@ -61,7 +61,7 @@ Keep `symlink://.` enabled while working on the library. When compiling a standa
 
 ```ini
 lib_deps =
-    https://github.com/synapse-2/ESP32_UtilityFunctions.git#1.0.0
+    https://github.com/synapse-2/ESP32_UtilityFunctions.git#2.0.0
 ```
 
 Do not use both the local symlink and the released dependency in the same environment; that can create duplicate or conflicting library resolutions.

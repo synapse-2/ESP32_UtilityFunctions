@@ -45,7 +45,7 @@ lib_deps =
 	https://github.com/synapse-2/ESP32_magic_enum.git
 	tzapu/WiFiManager @ ^2.0.17
 	arduino-libraries/Arduino_DebugUtils @ ^1.4.0
-	https://github.com/synapse-2/ESP32_UtilityFunctions.git#1.0.0
+	https://github.com/synapse-2/ESP32_UtilityFunctions.git#2.0.0
 
 board_build.partitions = partitions_NVM_PHY_OTA_16M.csv
 
