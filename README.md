@@ -36,15 +36,16 @@ UtilityFunctions/
 
 ## Installation
 
-Add the folling lines to Platformio.ini
+Add the folling lines to Platformio.ini, look at exmaple/simple workspace it has a fully working example 
 
 ```text
 
-lib_deps = 
+lib_deps =
 	fastled/FastLED @ ^3.10.1
-  https://github.com/synapse-2/ESP32_magic_enum.git
+	https://github.com/synapse-2/ESP32_magic_enum.git
 	tzapu/WiFiManager @ ^2.0.17
-  https://github.com/synapse-2/ESP32_UtilityFunctions.git#2.0.0
+	arduino-libraries/Arduino_DebugUtils @ ^1.4.0
+	https://github.com/synapse-2/ESP32_UtilityFunctions.git#1.0.0
 
 board_build.partitions = partitions_NVM_PHY_OTA_16M.csv
 
@@ -63,11 +64,11 @@ build_flags =
 	-D BOARD_HAS_PSRAM
 	-D USE_ESP_IDF_LOG
 	-D CCACHE_ENABLE=ON
-  -D WM_NOHELP						;do not show wifi manager help on the info page
+  	-D WM_NOHELP						;do not show wifi manager help on the info page
 
 ```
 
-If you want to fork the lib and do LIB dev then note the Platformio.ini file for the lib test build
+If you want to fork the lib and do LIB dev then note the Platformio.ini file for the lib test build this is provided in the main Workspace file 
 
 ```text
 src_dir = examples/LIB_bild_test/src 
@@ -80,19 +81,6 @@ lib_deps =
 	symlink://.	
   
 ```
-
-And the /examples/simple/src2/CMakeLists.txt file
-
-```text
-# This file was automatically generated for projects
-# without default 'CMakeLists.txt' file.
-
-FILE(GLOB_RECURSE app_sources ${CMAKE_SOURCE_DIR}/examples/simple/src2/*.*)
-FILE(GLOB_RECURSE app_sources ${CMAKE_SOURCE_DIR}/src2/*.*)
-
-idf_component_register(SRCS ${app_sources})
-```
-
 ---
 
 ## Configuration Flags
