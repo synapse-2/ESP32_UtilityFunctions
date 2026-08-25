@@ -103,6 +103,11 @@
 #define NVRAM_PERFS_WEB_STATUS_LOG_BUFFER_SIZE_PROP "weblogSize"
 #endif
 
+#ifndef STRINGIFY(x)
+#define STRINGIFY_IMPL(x) #x
+#define STRINGIFY(x) STRINGIFY_IMPL(x)
+#endif
+
 namespace UtilityFunctions
 {
 
