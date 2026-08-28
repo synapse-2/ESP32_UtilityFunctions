@@ -136,6 +136,16 @@ namespace UtilityFunctions
   void unpressRest();
   unsigned long resetMills();
 
+  bool disableTWDTimeronIdleTaskOnCore(int xCoreID);
+  bool enableTWDTimeronIdleTaskOnCore(int xCoreID);
+
+#if defined(CONFIG_LWIP_IPV4) || defined(CONFIG_LWIP_IPV6)
+  extern bool ntpTimeSynced;
+  // call this before the wifi or dchcp connect 
+  bool enableNTPTimeServer(String server);
+  bool isNTPTimeSynced();
+#endif
+
   void ledRed();
   void ledGreen();
   void ledYellow();

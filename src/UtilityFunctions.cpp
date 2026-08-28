@@ -24,6 +24,11 @@
 #include <WiFiManager.h>
 #endif
 
+#if defined(CONFIG_LWIP_IPV4) || defined(CONFIG_LWIP_IPV6)
+#include <esp_netif_sntp.h>
+#include <esp_sntp.h>
+#endif
+
 #define STRINGIFY_IMPL(x) #x
 #define STRINGIFY(x) STRINGIFY_IMPL(x)
 
@@ -1218,5 +1223,105 @@ namespace UtilityFunctions
       return Astr;
     }
   }
+
+  bool disableTWDTimeronIdleTaskOnCore(int xCoreID)
+  {
+
+    int core0EnabledOrig = 0;
+    int core1EnabledOrig = 0;
+    int panicEnabledOrig = 0;
+    int timeoutSecOrg = CONFIG_ESP_TASK_WDT_TIMEOUT_S;
+
+#ifdef CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0
+    core0EnabledOrig = 1;
+#endif
+
+#ifdef CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1
+    core1EnabledOrig = 1;
+#endif
+
+#ifdef CONFIG_ESP_TASK_WDT_PANIC
+    panicEnabledOrig = 1;
+#endif
+
+    if (xCoreID == 0)
+    {
+      bool ret = disableCore0WDT();
+      debugLog("CORE0 idle wachdog timer DISBALED");
+      return ret;
+    }
+    if (xCoreID == 1)
+    {
+      bool ret = disableCore1WDT();
+      debugLog("CORE1 idle wachdog timer DISBALED");
+      return ret;
+    }
+    return false;
+  }
+
+  bool enableTWDTimeronIdleTaskOnCore(int xCoreID)
+  {
+
+    int core0EnabledOrig = 0;
+    int core1EnabledOrig = 0;
+    int panicEnabledOrig = 0;
+    int timeoutSecOrg = CONFIG_ESP_TASK_WDT_TIMEOUT_S;
+
+#ifdef CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0
+    core0EnabledOrig = 1;
+#endif
+
+#ifdef CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1
+    core1EnabledOrig = 1;
+#endif
+
+#ifdef CONFIG_ESP_TASK_WDT_PANIC
+    panicEnabledOrig = 1;
+#endif
+
+    if ((xCoreID == 0) && (core0EnabledOrig == 1))
+    {
+      enableCore0WDT();
+      debugLog("CORE0 idle wachdog timer ENABLED");
+      return true;
+    }
+    if ((xCoreID == 1) && (core1EnabledOrig == 1))
+    {
+      enableCore1WDT();
+      debugLog("CORE1 idle wachdog timer ENABLED");
+      return true;
+    }
+    return false;
+  }
+
+#if defined(CONFIG_LWIP_IPV4) || defined(CONFIG_LWIP_IPV6)
+
+  bool ntpTimeSynced = false;
+  bool isNTPTimeSynced()
+  {
+    return ntpTimeSynced;
+  }
+
+  // call this before the wifi or dchcp connect
+  bool enableNTPTimeServer(String server)
+  {
+    esp_sntp_config_t config = ESP_NETIF_SNTP_DEFAULT_CONFIG(server.c_str());
+    config.start = true;                      // start SNTP service explicitly (after connecting)
+    config.server_from_dhcp = true;           // accept NTP offers from DHCP server, if any (need to enable *before* connecting)
+    config.renew_servers_after_new_IP = true; // let esp-netif update configured SNTP server(s) after receiving DHCP lease
+    config.index_of_first_server = 1;         // updates from server num 1, leaving server 0 (from DHCP) intact
+
+#ifdef CONFIG_ESP_WIFI_ENABLED
+    config.ip_event_to_renew = IP_EVENT_STA_GOT_IP; // configure the event on which we renew servers
+#else
+    config.ip_event_to_renew = IP_EVENT_ETH_GOT_IP; // configure the event on which we renew servers
+#endif
+    config.sync_cb = [](struct timeval *tv)
+    {
+      ntpTimeSynced = true;
+    }; // only if we need the notification function
+    esp_netif_sntp_init(&config);
+  }
+#endif
 
 } // namespace UtilityFunctions
