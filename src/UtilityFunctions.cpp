@@ -10,10 +10,18 @@
 #include <cstddef>
 #include <cstring>
 #include <esp_chip_info.h>
+
 #include <format>
+#include <ranges>
 #include <magic_Enum/magic_enum.hpp>
 #include <magic_Enum/magic_enum_iostream.hpp>
-#include <ranges>
+template <typename E>
+auto to_integer(magic_enum::Enum<E> value) -> int
+{
+  // magic_enum::Enum<E> - C++17 Concept for enum type.
+  return static_cast<magic_enum::underlying_type_t<E>>(value);
+}
+
 #include <string>
 #include "esp_partition.h"
 #include "esp_ota_ops.h"
@@ -25,19 +33,16 @@
 #endif
 
 #if defined(CONFIG_LWIP_IPV4) || defined(CONFIG_LWIP_IPV6)
-#include <esp_netif_sntp.h>
-#include <esp_sntp.h>
+// Check if compiling on a version that supports the modern unified header
+#if __has_include("esp_netif_sntp.h")
+#include "esp_netif_sntp.h"
+#endif
+#include "esp_sntp.h"
+#include "time.h"
 #endif
 
 #define STRINGIFY_IMPL(x) #x
 #define STRINGIFY(x) STRINGIFY_IMPL(x)
-
-template <typename E>
-auto to_integer(magic_enum::Enum<E> value) -> int
-{
-  // magic_enum::Enum<E> - C++17 Concept for enum type.
-  return static_cast<magic_enum::underlying_type_t<E>>(value);
-}
 
 // CRGB UtilityFunctions::leds[NUMPIXELS];
 
@@ -649,7 +654,10 @@ namespace UtilityFunctions
 
     // Get the system state and fill the array
 
-#ifdef configGENERATE_RUN_TIME_STATS
+#ifndef configGENERATE_RUN_TIME_STATS
+#define configGENERATE_RUN_TIME_STATS 0
+#endif
+#if (configGENERATE_RUN_TIME_STATS == 1)
 
     configRUN_TIME_COUNTER_TYPE ulTotalRunTime, ulStatsAsPercentage;
 
@@ -675,7 +683,7 @@ namespace UtilityFunctions
 
           if (taskStatusArray[i].uxCurrentPriority == pri)
           {
-#ifdef configGENERATE_RUN_TIME_STATS
+#if (configGENERATE_RUN_TIME_STATS == 1)
             /* What percentage of the total run time has the task used?
                 This will always be rounded down to the nearest integer.
             ulTotalRunTimeDiv100 has already been divided by 100. */
@@ -689,7 +697,7 @@ namespace UtilityFunctions
               ulStatsAsPercentage = taskStatusArray[i].ulRunTimeCounter;
             }
 #else
-            ulStatsAsPercentage = 0;
+            int ulStatsAsPercentage = 0;
 #endif
 
             const char *taskName = taskStatusArray[i].pcTaskName;
@@ -819,7 +827,12 @@ namespace UtilityFunctions
   String ledCInfo()
   {
 
-    std::string str = std::format("");
+#if (HAS_FORMAT == 0)
+    std::string str = "";
+#else
+
+  std::string str = std::format("");
+#endif
 
     // Iterate through high-speed mode channels
 #if SOC_LEDC_SUPPORT_HS_MODE
@@ -838,11 +851,11 @@ namespace UtilityFunctions
       str = str + std::format("Timer {}: Freq={} {} Hz\n", timer, ((freq == 259) ? "Not Init" : ""), freq);
     }
 #else
-  str = str + std::format("High-Speed Mode Channels: NA \n");
+  str = str + "High-Speed Mode Channels: NA \n";
 #endif
 
     // Iterate through low-speed mode channels
-    str = str + std::format("Low-Speed Mode Channels:\n");
+    str = str + "Low-Speed Mode Channels:\n";
     // for (int channel = 0; channel < LEDC_CHANNEL_MAX; channel++)
     // do only one channel for now to reduce the amt of error logs from the esp framework
     for (int channel = 0; channel < 1; channel++)
@@ -859,6 +872,7 @@ namespace UtilityFunctions
     {
       uint32_t freq =
           ledc_get_freq(ledc_mode_t::LEDC_LOW_SPEED_MODE, (ledc_timer_t)timer);
+
       str = str + std::format("Timer {}: Freq={} {} Hz\n", timer, ((freq == 259) ? "Not Init" : ""), freq);
     }
 
@@ -868,7 +882,7 @@ namespace UtilityFunctions
   String partitionInfo()
   {
 
-    std::string str = std::format("");
+    std::string str = "";
 
     // Iterate through the partitions
     str = str + std::format(
@@ -881,8 +895,10 @@ namespace UtilityFunctions
     while (it != NULL)
     {
       const esp_partition_t *p = esp_partition_get(it);
+
       str = str + std::format("{: <17}{:#04X} {:#04X}\n{:#010X} {:#010X} {:0>4}Kb {: <1} {: <1}\n",
                               p->label, (uint32_t)p->type, (uint32_t)p->subtype, p->address, p->size, p->size / 1024, p->encrypted, p->readonly);
+
       it = esp_partition_next(it);
     }
 
@@ -1035,39 +1051,46 @@ namespace UtilityFunctions
 
     std::string str =
         std::format("{}:CORE:{}:{}\n", getDateTimeUTC().c_str(), xPortGetCoreID(), message.c_str());
+
     Serial.printf(str.c_str());
     webLogBuffer.pushString(str);
   }
   void debugLogf(const char *format, ...)
   {
-    char loc_buf[512];
-    char *temp = loc_buf;
-    va_list args;
+
+    va_list args, args_copy;
     va_start(args, format);
-    int len = vsnprintf(temp, sizeof(loc_buf), format, args);
-    va_end(args);
+    // Clone the arguments so we can safely traverse them twice if needed
+    va_copy(args_copy, args);
+
+    // Measure the exact length required (passing NULL/0 doesn't write anything)
+    int len = vsnprintf(NULL, 0, format, args);
+
     if (len < 0)
     {
+      va_end(args);
+      va_end(args_copy);
       return;
     }
-    if (len >=
-        (int)sizeof(loc_buf))
-    { // comparation of same sign type for the compiler
-      temp = (char *)malloc(len + 1);
-      if (temp == NULL)
-      {
-        return;
-      }
-      len = vsnprintf(temp, len + 1, format, args);
+
+    char *temp = (char *)malloc(len + 1);
+    if (temp == NULL)
+    {
+      va_end(args);
+      va_end(args_copy);
+      return;
     }
+
+    // Format the actual string using the safely cloned arguments
+    vsnprintf(temp, len + 1, format, args_copy);
+
+    // Clean up both argument lists
+    va_end(args);
+    va_end(args_copy);
 
     finalLog(temp);
+    free(temp);
 
-    // len = Serial.write((uint8_t *)temp, len);
-    if (temp != loc_buf)
-    {
-      free(temp);
-    }
     return;
   }
 
@@ -1076,7 +1099,9 @@ namespace UtilityFunctions
     if (timestamp)
     {
       std::string str;
+
       str = std::format("{}:C{}:{}", getDateTimeUTC().c_str(), xPortGetCoreID(), temp);
+
       Serial.printf(str.c_str());
       webLogBuffer.pushString(str);
     }
@@ -1092,7 +1117,9 @@ namespace UtilityFunctions
     if (timestamp)
     {
       std::string str;
+
       str = std::format("{}:C{}:{}", getDateTimeUTC().c_str(), xPortGetCoreID(), temp);
+
       Serial.printf(str.c_str());
       webLogBuffer.pushString(str);
     }
@@ -1139,7 +1166,9 @@ namespace UtilityFunctions
 
   String getBuildTimeVersion()
   {
+
     std::string str = std::format("Build Time:{} {}", __DATE__, __TIME__);
+
     return String(str.c_str());
   }
 
@@ -1226,24 +1255,6 @@ namespace UtilityFunctions
 
   bool disableTWDTimeronIdleTaskOnCore(int xCoreID)
   {
-
-    int core0EnabledOrig = 0;
-    int core1EnabledOrig = 0;
-    int panicEnabledOrig = 0;
-    int timeoutSecOrg = CONFIG_ESP_TASK_WDT_TIMEOUT_S;
-
-#ifdef CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0
-    core0EnabledOrig = 1;
-#endif
-
-#ifdef CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1
-    core1EnabledOrig = 1;
-#endif
-
-#ifdef CONFIG_ESP_TASK_WDT_PANIC
-    panicEnabledOrig = 1;
-#endif
-
     if (xCoreID == 0)
     {
       bool ret = disableCore0WDT();
@@ -1265,7 +1276,11 @@ namespace UtilityFunctions
     int core0EnabledOrig = 0;
     int core1EnabledOrig = 0;
     int panicEnabledOrig = 0;
+#ifdef CONFIG_ESP_TASK_WDT_TIMEOUT_S
     int timeoutSecOrg = CONFIG_ESP_TASK_WDT_TIMEOUT_S;
+#else
+  int timeoutSecOrg = 5;
+#endif
 
 #ifdef CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0
     core0EnabledOrig = 1;
@@ -1302,25 +1317,68 @@ namespace UtilityFunctions
     return ntpTimeSynced;
   }
 
-  // call this before the wifi or dchcp connect
+  // call this AFTER WiFi connect is done or IP stack is up
   bool enableNTPTimeServer(String server)
   {
-    esp_sntp_config_t config = ESP_NETIF_SNTP_DEFAULT_CONFIG(server.c_str());
-    config.start = true;                      // start SNTP service explicitly (after connecting)
-    config.server_from_dhcp = true;           // accept NTP offers from DHCP server, if any (need to enable *before* connecting)
-    config.renew_servers_after_new_IP = true; // let esp-netif update configured SNTP server(s) after receiving DHCP lease
-    config.index_of_first_server = 1;         // updates from server num 1, leaving server 0 (from DHCP) intact
-
-#ifdef CONFIG_ESP_WIFI_ENABLED
-    config.ip_event_to_renew = IP_EVENT_STA_GOT_IP; // configure the event on which we renew servers
-#else
-    config.ip_event_to_renew = IP_EVENT_ETH_GOT_IP; // configure the event on which we renew servers
-#endif
-    config.sync_cb = [](struct timeval *tv)
+    esp_netif_init();
+    if (esp_sntp_enabled())
     {
-      ntpTimeSynced = true;
-    }; // only if we need the notification function
-    esp_netif_sntp_init(&config);
+      debugLog("SNTP Server ENABLED");
+      esp_sntp_stop();
+    }
+    else
+    {
+      debugLog("SNTP Server DISABLED");
+    }
+
+    ntpTimeSynced = false;
+    esp_sntp_setoperatingmode((esp_sntp_operatingmode_t)SNTP_OPMODE_POLL);
+    esp_sntp_servermode_dhcp(true);
+    if (CONFIG_LWIP_SNTP_MAX_SERVERS <= 1)
+    {
+      debugLogf("NTP time servers var CONFIG_LWIP_SNTP_MAX_SERVERS is ste to %i, set to higher that 1", CONFIG_LWIP_SNTP_MAX_SERVERS);
+    };
+
+    String defaultServer = String(esp_sntp_getservername(0));
+    if (defaultServer.isEmpty())
+    {
+      esp_sntp_setservername(0, server.c_str());
+    }
+    else
+    {
+      esp_sntp_setservername(1, server.c_str());
+    }
+
+    sntp_set_time_sync_notification_cb([](struct timeval *tv)
+                                       {
+      debugLog("NTP time synced");
+      ntpTimeSynced = true; }); // only if we need the notification function)
+
+    esp_sntp_init();
+    debugLog("SNTP Server ENABLED");
+    // sntp_sync_status_t status = sntp_get_sync_status();
+
+    // // Map the enum to a text string
+    // const char *status_text = "UNKNOWN";
+
+    // switch (status)
+    // {
+    // case SNTP_SYNC_STATUS_RESET:
+    //   status_text = "RESET (Not Synced / 1970 Time)";
+    //   break;
+    // case SNTP_SYNC_STATUS_COMPLETED:
+    //   status_text = "COMPLETED (Successfully Synced)";
+    //   break;
+    // case SNTP_SYNC_STATUS_IN_PROGRESS:
+    //   status_text = "IN_PROGRESS (Smooth Sync Drifting)";
+    //   break;
+    // }
+
+    // // Print the results (Both formats provided, choose one)
+
+    // debugLogf("SNTP Raw Status: %d -> Text: %s\n", (int)status, status_text);
+
+    return false;
   }
 #endif
 

@@ -1,5 +1,7 @@
 # UtilityFunctions
 
+**Latest release: `3.0.0`**
+
 A robust, thread-safe system utility library optimized for ESP32 and ESP32-S3 microcontrollers on arduino esp32 framework. This library provides foundational services like:
  1. Loggig
  2. Restart on button push
@@ -47,7 +49,7 @@ lib_deps =
 	https://github.com/synapse-2/ESP32_magic_enum.git
 	tzapu/WiFiManager @ ^2.0.17
 	arduino-libraries/Arduino_DebugUtils @ ^1.4.0
-	https://github.com/synapse-2/ESP32_UtilityFunctions.git#2.0.0
+  https://github.com/synapse-2/ESP32_UtilityFunctions.git#3.0.0
 
 board_build.partitions = partitions_NVM_PHY_OTA_16M.csv
 
